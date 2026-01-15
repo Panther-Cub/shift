@@ -72,6 +72,7 @@ const FORMAT_OPTIONS: { value: OutputFormat; label: string }[] = [
   { value: 'mp4', label: 'MP4 (H.264)' },
   { value: 'mov', label: 'MOV (H.264)' },
 ];
+const TIP_URL = 'https://ko-fi.com/pantherandcub';
 
 export function VideoConverter() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
@@ -80,6 +81,11 @@ export function VideoConverter() {
   const [showSettings, setShowSettings] = useState(false);
   const [batchSettings, setBatchSettings] = useState<BatchSettings>(DEFAULT_BATCH_SETTINGS);
   const nextSequence = useRef(1);
+  const jobsRef = useRef<JobItem[]>([]);
+
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
 
   // Set up Tauri file drop listener
   useEffect(() => {
@@ -157,7 +163,7 @@ export function VideoConverter() {
         .map(path => ({
           id: crypto.randomUUID(),
           path,
-          name: path.split('/').pop() || path,
+          name: path.split(/[/\\]/).pop() || path,
           sequence: sequence++,
           status: 'idle' as JobStatus,
           progress: 0,
@@ -187,14 +193,19 @@ export function VideoConverter() {
 
   const applyDefaultsToAll = () => {
     setJobs(prev =>
-      prev.map(job => ({
-        ...job,
-        options: {
-          ...job.options,
-          quality: batchSettings.defaultQuality,
-          fps: batchSettings.defaultFps,
-        },
-      }))
+      prev.map(job => {
+        if (job.status === 'converting') {
+          return job;
+        }
+        return {
+          ...job,
+          options: {
+            ...job.options,
+            quality: batchSettings.defaultQuality,
+            fps: batchSettings.defaultFps,
+          },
+        };
+      })
     );
   };
 
@@ -241,14 +252,13 @@ export function VideoConverter() {
 
     setBatchRunning(true);
     const ids = queue.map(job => job.id);
-    const jobMap = new Map(jobs.map(job => [job.id, job]));
     const queueIds = [...ids];
 
     const runNext = async (): Promise<void> => {
       const id = queueIds.shift();
       if (!id) return;
-      const current = jobMap.get(id);
-      if (current) {
+      const current = jobsRef.current.find(job => job.id === id);
+      if (current && (current.status === 'idle' || current.status === 'error')) {
         await handleConvertJob(current);
       }
       await runNext();
@@ -282,6 +292,14 @@ export function VideoConverter() {
       } catch (revealError) {
         console.error('Failed to reveal path:', revealError);
       }
+    }
+  };
+
+  const handleOpenTip = async () => {
+    try {
+      await openPath(TIP_URL);
+    } catch (error) {
+      console.error('Failed to open tip link:', error);
     }
   };
 
@@ -426,6 +444,7 @@ export function VideoConverter() {
               variant="ghost"
               size="sm"
               onClick={() => handleRemoveJob(job.id)}
+              disabled={job.status === 'converting'}
               className="ml-auto h-7 w-7 rounded-full p-0 text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
             >
               <Trash2 className="h-4 w-4" />
@@ -483,14 +502,6 @@ export function VideoConverter() {
                 onClick={() => setShowSettings(prev => !prev)}
               >
                 {showSettings ? 'Hide Settings' : 'Batch Settings'}
-              </Button>
-              <Button
-                variant="ghost"
-                className="h-8 rounded-full px-3 text-xs text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
-                onClick={handleClearCompleted}
-                disabled={jobs.length === 0}
-              >
-                Clear Completed
               </Button>
             </div>
           </div>
@@ -708,8 +719,24 @@ export function VideoConverter() {
             <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.total} files</span>
             <span>{stats.running} running</span>
             <span>{stats.done} done</span>
+            <Button
+              variant="ghost"
+              className="h-6 rounded-full px-2 text-[11px] text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+              onClick={handleClearCompleted}
+              disabled={jobs.length === 0}
+            >
+              Clear Completed
+            </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 rounded-full border-black/10 bg-white px-2 text-[11px] text-gray-700 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800"
+              onClick={handleOpenTip}
+            >
+              Buy me a coffee
+            </Button>
             <div className="flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-2 py-1 text-[11px] text-gray-600 shadow-sm dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-300">
               <Folder className="h-3 w-3" />
               <span className="max-w-[180px] truncate">

@@ -359,15 +359,30 @@ fn fallback_convert_with_webpmux(
     let mut cmd = Command::new(ffmpeg_path);
     cmd.args(["-hide_banner", "-loglevel", "error"]);
     if let Some(fps) = settings.fps {
-        let input_pattern = temp_dir.join("composed_%04d.png");
-        cmd.args([
-            "-framerate",
-            &fps.to_string(),
-            "-i",
-            input_pattern
-                .to_str()
-                .ok_or_else(|| "Invalid input pattern".to_string())?,
-        ]);
+        if frame_paths.len() == 1 {
+            let single_path = frame_paths
+                .first()
+                .and_then(|(path, _)| path.to_str())
+                .ok_or_else(|| "Invalid frame path".to_string())?;
+            cmd.args([
+                "-loop",
+                "1",
+                "-t",
+                &settings.static_duration.to_string(),
+                "-i",
+                single_path,
+            ]);
+        } else {
+            let input_pattern = temp_dir.join("composed_%04d.png");
+            cmd.args([
+                "-framerate",
+                &fps.to_string(),
+                "-i",
+                input_pattern
+                    .to_str()
+                    .ok_or_else(|| "Invalid input pattern".to_string())?,
+            ]);
+        }
     } else {
         cmd.args(["-f", "concat", "-safe", "0", "-i", &concat_str]);
     }
@@ -994,6 +1009,7 @@ fn render_output_name(template: &str, input_stem: &str, sequence: u32, ext: &str
     name = replace_token(&name, "time", &time);
     name = replace_token(&name, "ext", ext);
     name = sanitize_filename(name.trim());
+    name = strip_trailing_extension(&name, ext);
     if name.is_empty() {
         sanitize_filename(input_stem)
     } else {
@@ -1018,6 +1034,19 @@ fn replace_token(source: &str, token: &str, value: &str) -> String {
     source.replace(&brace, value).replace(&bracket, value)
 }
 
+fn strip_trailing_extension(value: &str, ext: &str) -> String {
+    if ext.is_empty() {
+        return value.to_string();
+    }
+    let lower = value.to_lowercase();
+    let suffix = format!(".{}", ext.to_lowercase());
+    if lower.ends_with(&suffix) && value.len() >= suffix.len() {
+        let new_len = value.len() - suffix.len();
+        return value[..new_len].to_string();
+    }
+    value.to_string()
+}
+
 fn format_date_time() -> (String, String) {
     let now = OffsetDateTime::now_utc();
     let date_format = format_description::parse("[year][month][day]").unwrap();
@@ -1031,7 +1060,7 @@ fn format_date_time() -> (String, String) {
     (date, time)
 }
 
-fn ensure_unique_path(mut path: PathBuf) -> PathBuf {
+fn ensure_unique_path(path: PathBuf) -> PathBuf {
     if !path.exists() {
         return path;
     }
