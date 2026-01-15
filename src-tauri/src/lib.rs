@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fs, fs::File, io::Read};
 use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use serde::Deserialize;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Listener, Manager};
 use image::{imageops, Rgba, RgbaImage};
 
 #[tauri::command]
@@ -927,10 +927,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Ensure the main window is visible
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-            }
+            let app_handle = app.handle().clone();
+            app.listen("app-ready", move |_| {
+                if let Some(main_window) = app_handle.get_webview_window("main") {
+                    let _ = main_window.show();
+                    let _ = main_window.set_focus();
+                }
+            });
+            let fallback_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(5));
+                if let Some(main_window) = fallback_handle.get_webview_window("main") {
+                    if !main_window.is_visible().unwrap_or(false) {
+                        let _ = main_window.show();
+                        let _ = main_window.set_focus();
+                    }
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![convert_webp_to_mp4])

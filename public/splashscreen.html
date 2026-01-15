@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shift</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #e7e9f2;
+        color: #121621;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        width: 320px;
+        height: 160px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 16px;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.15);
+        display: grid;
+        place-items: center;
+        gap: 10px;
+        padding: 18px;
+        text-align: center;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .subtitle {
+        font-size: 13px;
+        color: #556070;
+      }
+      .bar {
+        width: 140px;
+        height: 6px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(18, 22, 33, 0.12);
+        position: relative;
+      }
+      .bar::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-70%);
+        background: linear-gradient(90deg, rgba(18, 22, 33, 0.1), rgba(18, 22, 33, 0.6), rgba(18, 22, 33, 0.1));
+        animation: loading 1.2s infinite ease-in-out;
+      }
+      @keyframes loading {
+        0% {
+          transform: translateX(-70%);
+        }
+        100% {
+          transform: translateX(70%);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="title">Shift</div>
+      <div class="subtitle">Preparing your workspace</div>
+      <div class="bar"></div>
+    </div>
+  </body>
+</html>

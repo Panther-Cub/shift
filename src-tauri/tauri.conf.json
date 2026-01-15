@@ -21,7 +21,7 @@
         "maxHeight": 700,
         "resizable": false,
         "fullscreen": false,
-        "visible": true,
+        "visible": false,
         "dragDropEnabled": true
       }
     ],
