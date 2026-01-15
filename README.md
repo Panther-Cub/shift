@@ -8,7 +8,7 @@ Shift is a native macOS application that makes WebP to MP4 conversion simple and
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 <p align="center">
-  <img src="screenshot.png" alt="Shift App Screenshot" width="800">
+  <img src="src/assets/preview.png" alt="Shift App Screenshot" width="800">
 </p>
 
 ## Download
