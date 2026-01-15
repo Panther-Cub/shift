@@ -7,9 +7,13 @@ Shift is a native macOS application that makes WebP to MP4 conversion simple and
 ![macOS](https://img.shields.io/badge/macOS-ARM64-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
+<p align="center">
+  <img src="screenshot.png" alt="Shift App Screenshot" width="800">
+</p>
+
 ## Download
 
-**[Download Shift v0.1.0 (Apple Silicon)](https://github.com/Panther-Cub/shift/releases/latest)**
+**[Download Shift (Apple Silicon)](https://github.com/Panther-Cub/shift/releases/latest)**
 
 Just download the DMG, drag Shift to your Applications folder, and you're ready to go. No dependencies, no setup required.
 
