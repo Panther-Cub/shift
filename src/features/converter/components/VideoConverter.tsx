@@ -41,6 +41,17 @@ const DEFAULT_OPTIONS: JobOptions = {
   quality: 'high',
   fps: null,
 };
+const QUALITY_OPTIONS: { value: QualityPreset; label: string }[] = [
+  { value: 'high', label: 'High' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'small', label: 'Small' },
+];
+const FPS_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'Original' },
+  { value: 24, label: '24' },
+  { value: 30, label: '30' },
+  { value: 60, label: '60' },
+];
 
 export function VideoConverter() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
@@ -238,7 +249,7 @@ export function VideoConverter() {
       size: 300,
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-gray-900 dark:text-gray-100">{row.original.name}</p>
+          <p className="truncate text-[12px] font-semibold text-gray-900 dark:text-gray-100">{row.original.name}</p>
           <p className="truncate text-[11px] text-gray-400 dark:text-neutral-500">{row.original.path}</p>
         </div>
       ),
@@ -252,13 +263,13 @@ export function VideoConverter() {
         return (
           <div className="space-y-1 text-[11px]">
             {job.status === 'success' && (
-              <span className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-500">
+              <span className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="h-3 w-3" />
                 Done
               </span>
             )}
             {job.status === 'error' && (
-              <span className="flex items-center gap-1 font-semibold text-rose-700 dark:text-rose-500">
+              <span className="flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">
                 <AlertCircle className="h-3 w-3" />
                 Failed
               </span>
@@ -280,58 +291,70 @@ export function VideoConverter() {
     {
       header: 'Quality',
       id: 'quality',
-      size: 90,
+      size: 120,
       cell: ({ row }) => (
-        <select
-          className="h-7 w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 px-2 text-[11px]"
-          value={row.original.options.quality}
-          onChange={(event) =>
-            updateJobOptions(row.original.id, { quality: event.target.value as QualityPreset })
-          }
-          disabled={row.original.status === 'converting'}
-        >
-          <option value="high">High</option>
-          <option value="balanced">Balanced</option>
-          <option value="small">Small</option>
-        </select>
+        <div className="relative inline-flex w-full max-w-[140px] items-center">
+          <select
+            className="h-8 w-full appearance-none rounded-lg border border-black/10 bg-white px-3 pr-7 text-[12px] font-medium text-gray-800 shadow-sm outline-none transition hover:bg-gray-50 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800 dark:focus:ring-white/10"
+            value={row.original.options.quality}
+            onChange={(event) =>
+              updateJobOptions(row.original.id, { quality: event.target.value as QualityPreset })
+            }
+            disabled={row.original.status === 'converting'}
+          >
+            {QUALITY_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <span className="pointer-events-none absolute right-2 text-[10px] text-gray-500 dark:text-neutral-400">
+            ▾
+          </span>
+        </div>
       ),
     },
     {
       header: 'FPS',
       id: 'fps',
-      size: 80,
+      size: 120,
       cell: ({ row }) => (
-        <select
-          className="h-7 w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 px-2 text-[11px]"
-          value={row.original.options.fps ?? 'auto'}
-          onChange={(event) => {
-            const value = event.target.value;
-            updateJobOptions(row.original.id, { fps: value === 'auto' ? null : Number(value) });
-          }}
-          disabled={row.original.status === 'converting'}
-        >
-          <option value="auto">Original</option>
-          <option value="24">24 fps</option>
-          <option value="30">30 fps</option>
-          <option value="60">60 fps</option>
-        </select>
+        <div className="relative inline-flex w-full max-w-[140px] items-center">
+          <select
+            className="h-8 w-full appearance-none rounded-lg border border-black/10 bg-white px-3 pr-7 text-[12px] font-medium text-gray-800 shadow-sm outline-none transition hover:bg-gray-50 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800 dark:focus:ring-white/10"
+            value={row.original.options.fps ?? 'auto'}
+            onChange={(event) => {
+              const value = event.target.value;
+              updateJobOptions(row.original.id, { fps: value === 'auto' ? null : Number(value) });
+            }}
+            disabled={row.original.status === 'converting'}
+          >
+            <option value="auto">Original</option>
+            <option value="24">24 fps</option>
+            <option value="30">30 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+          <span className="pointer-events-none absolute right-2 text-[10px] text-gray-500 dark:text-neutral-400">
+            ▾
+          </span>
+        </div>
       ),
     },
     {
       header: 'Actions',
       id: 'actions',
-      size: 140,
+      size: 160,
       cell: ({ row }) => {
         const job = row.original;
         const logPath = extractLogPath(job.error);
         return (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex w-full items-center gap-1">
             <Button
               variant="default"
               size="sm"
               onClick={() => handleConvertJob(job)}
               disabled={job.status === 'converting'}
-              className="h-7 px-2 text-[11px]"
+              className="h-7 rounded-full bg-gray-900 px-2 text-[11px] text-white hover:bg-black disabled:bg-gray-300 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
             >
               {job.status === 'converting' ? 'Running' : 'Convert'}
             </Button>
@@ -340,7 +363,7 @@ export function VideoConverter() {
                 variant="ghost"
                 size="sm"
                 onClick={() => revealItemInDir(job.outputPath!)}
-                className="h-7 px-2 text-[11px]"
+                className="h-7 rounded-full px-2 text-[11px] text-gray-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
               >
                 Reveal
               </Button>
@@ -350,7 +373,7 @@ export function VideoConverter() {
                 variant="ghost"
                 size="sm"
                 onClick={() => handleOpenPath(logPath)}
-                className="h-7 px-2 text-[11px]"
+                className="h-7 rounded-full px-2 text-[11px] text-gray-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
               >
                 Log
               </Button>
@@ -359,7 +382,7 @@ export function VideoConverter() {
               variant="ghost"
               size="sm"
               onClick={() => handleRemoveJob(job.id)}
-              className="h-7 w-7 p-0"
+              className="ml-auto h-7 w-7 rounded-full p-0 text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -384,36 +407,74 @@ export function VideoConverter() {
 
   return (
     <div
-      className="min-h-screen bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 overflow-x-hidden"
+      className="min-h-screen bg-[#f6f6f8] dark:bg-neutral-950 text-gray-900 dark:text-gray-100 overflow-x-hidden"
       style={{ fontFamily: '"SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif' }}
     >
-      <div className="flex min-h-screen w-full flex-col pb-20">
-        <section className="flex-1 overflow-y-auto">
-          {jobs.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 border-b border-gray-200 dark:border-neutral-700 py-16 text-center">
-              <FileVideo className="h-10 w-10 text-gray-300 dark:text-neutral-600" />
-              <div>
-                <p className="text-lg font-semibold">No files queued</p>
-                <p className="text-sm text-gray-400 dark:text-neutral-500">Drop WebP files here or add them below.</p>
-              </div>
-              <Button onClick={handleSelectFile} className="gap-2">
-                <Upload className="h-4 w-4" />
-                Add WebP Files
+      <div className="flex min-h-screen w-full flex-col pb-16">
+        <header className="sticky top-0 z-30 border-b border-black/5 dark:border-white/10 bg-white/70 dark:bg-neutral-900/70 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] text-gray-500 dark:text-neutral-400">{stats.total} queued</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSelectFile}
+                className="h-8 rounded-full border-black/10 bg-white/80 px-3 text-xs text-gray-700 shadow-sm hover:bg-white dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800"
+              >
+                <Upload className="mr-1 h-3.5 w-3.5" />
+                Add Files
+              </Button>
+              <Button
+                onClick={handleStartAll}
+                disabled={batchRunning || jobs.length === 0}
+                className="h-8 rounded-full bg-gray-900 px-3 text-xs text-white shadow-sm hover:bg-black disabled:bg-gray-300 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+              >
+                <Play className="mr-1 h-3.5 w-3.5" />
+                {batchRunning ? 'Running...' : 'Start All'}
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-8 rounded-full px-3 text-xs text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                onClick={handleClearCompleted}
+                disabled={jobs.length === 0}
+              >
+                Clear Completed
               </Button>
             </div>
+          </div>
+        </header>
+        <section className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+          {jobs.length === 0 ? (
+            <div className="flex min-h-[60vh] items-center justify-center">
+              <div className="flex w-full max-w-md flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-gray-200 bg-white/70 px-6 py-14 text-center shadow-sm dark:border-white/10 dark:bg-neutral-900/60">
+                <FileVideo className="h-10 w-10 text-gray-300 dark:text-neutral-600" />
+                <div>
+                  <p className="text-lg font-semibold">No files queued</p>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400">Drop WebP files here or add them above.</p>
+                </div>
+                <Button
+                  onClick={handleSelectFile}
+                  className="h-9 rounded-full bg-gray-900 px-4 text-xs text-white shadow-sm hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Add WebP Files
+                </Button>
+              </div>
+            </div>
           ) : (
-            <div className="border-y border-gray-200 dark:border-neutral-700 overflow-x-hidden">
-              <table className="w-full table-fixed text-left text-xs">
+            <div className="overflow-hidden rounded-2xl border border-black/5 bg-white/80 shadow-sm dark:border-white/10 dark:bg-neutral-900/70">
+              <table className="w-full table-fixed text-left text-[12px]">
                 <colgroup>
                   {table.getAllLeafColumns().map(column => (
                     <col key={column.id} style={{ width: column.getSize() }} />
                   ))}
                 </colgroup>
-                <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 text-[10px] uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                <thead className="sticky top-0 z-10 bg-white/90 text-[11px] font-medium text-gray-500 backdrop-blur dark:bg-neutral-900/80 dark:text-neutral-400">
                   {table.getHeaderGroups().map(headerGroup => (
-                    <tr key={headerGroup.id} className="border-b border-gray-200 dark:border-neutral-700">
+                    <tr key={headerGroup.id} className="border-b border-black/5 dark:border-white/10">
                       {headerGroup.headers.map(header => (
-                        <th key={header.id} className="px-2 py-2 font-semibold">
+                        <th key={header.id} className="px-3 py-2 font-medium">
                           {header.isPlaceholder
                             ? null
                             : flexRender(header.column.columnDef.header, header.getContext())}
@@ -423,10 +484,10 @@ export function VideoConverter() {
                   ))}
                 </thead>
                 <tbody>
-                  {table.getRowModel().rows.map((row, index) => (
-                    <tr key={row.id} className={index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-gray-50/60 dark:bg-neutral-800/60'}>
+                  {table.getRowModel().rows.map((row) => (
+                    <tr key={row.id} className="border-b border-black/5 last:border-b-0 hover:bg-gray-50/80 dark:border-white/5 dark:hover:bg-white/5">
                       {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} className="px-2 py-2 align-top">
+                        <td key={cell.id} className="px-3 py-3 align-top">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
                       ))}
@@ -440,43 +501,35 @@ export function VideoConverter() {
       </div>
 
       {isDragging && (
-        <div className="pointer-events-none fixed inset-0 flex items-center justify-center bg-white/80 dark:bg-neutral-900/80 text-sm text-gray-500 dark:text-neutral-400">
-          Drop files to add them to the queue
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-white/70 text-sm text-gray-600 backdrop-blur dark:bg-neutral-900/70 dark:text-neutral-300">
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white/90 px-8 py-6 text-sm shadow-sm dark:border-white/20 dark:bg-neutral-900/90">
+            Drop files to add them to the queue
+          </div>
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <div className="flex w-full flex-wrap items-center justify-between gap-2 px-2 py-2">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600 dark:text-neutral-400">
-              <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.total} files</span>
-              <span>{stats.running} running</span>
-              <span>{stats.done} done</span>
+      <div className="fixed bottom-0 left-0 right-0 border-t border-black/5 bg-white/70 backdrop-blur dark:border-white/10 dark:bg-neutral-900/70">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-2 text-[11px] text-gray-500 dark:text-neutral-400">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.total} files</span>
+            <span>{stats.running} running</span>
+            <span>{stats.done} done</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-2 py-1 text-[11px] text-gray-600 shadow-sm dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-300">
+              <Folder className="h-3 w-3" />
+              <span className="max-w-[180px] truncate">
+                {batchSettings.outputDir ? batchSettings.outputDir : 'Same folder'}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 rounded-full px-2 text-[11px] text-gray-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                onClick={handleSelectOutputDir}
+              >
+                Choose…
+              </Button>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-neutral-700 px-2 py-1 text-[11px] text-gray-500 dark:text-neutral-400">
-                <Folder className="h-3 w-3" />
-                <span className="max-w-[160px] truncate">
-                  {batchSettings.outputDir ? batchSettings.outputDir : 'Same folder'}
-                </span>
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-gray-100" onClick={handleSelectOutputDir}>
-                  Choose
-                </Button>
-              </div>
-            <Button variant="outline" onClick={handleSelectFile} className="h-8 gap-2 px-3 text-xs dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-100 dark:hover:bg-neutral-700">
-              <Upload className="h-3 w-3" />
-              Add Files
-            </Button>
-            <Button
-              onClick={handleStartAll}
-              disabled={batchRunning || jobs.length === 0}
-              className="h-8 gap-2 px-3 text-xs dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white"
-            >
-              <Play className="h-3 w-3" />
-              {batchRunning ? 'Running batch...' : 'Start All'}
-            </Button>
-            <Button variant="ghost" className="h-8 px-2 text-xs dark:text-gray-300 dark:hover:bg-neutral-800 dark:hover:text-gray-100" onClick={handleClearCompleted} disabled={jobs.length === 0}>
-              Clear Completed
-            </Button>
           </div>
         </div>
       </div>
