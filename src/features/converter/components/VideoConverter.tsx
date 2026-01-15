@@ -3,7 +3,7 @@ import { convertWebPToMp4 } from '@/features/converter/api/convert';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle2, AlertCircle, Play, Trash2, FileVideo, Folder } from 'lucide-react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openUrl, openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   flexRender,
@@ -297,7 +297,7 @@ export function VideoConverter() {
 
   const handleOpenTip = async () => {
     try {
-      await openPath(TIP_URL);
+      await openUrl(TIP_URL);
     } catch (error) {
       console.error('Failed to open tip link:', error);
     }
