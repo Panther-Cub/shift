@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { convertWebPToMp4 } from '@/features/converter/api/convert';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle2, AlertCircle, Play, Trash2, FileVideo, Folder } from 'lucide-react';
@@ -25,6 +25,7 @@ type JobItem = {
   id: string;
   path: string;
   name: string;
+  sequence: number;
   status: JobStatus;
   progress: number;
   error?: string;
@@ -32,14 +33,29 @@ type JobItem = {
   options: JobOptions;
 };
 
+type OutputFormat = 'mp4' | 'mov';
+
 type BatchSettings = {
   outputDir: string | null;
+  format: OutputFormat;
+  outputNameTemplate: string;
+  defaultQuality: QualityPreset;
+  defaultFps: number | null;
+  staticDuration: number;
 };
 
 const MAX_CONCURRENT = 2;
 const DEFAULT_OPTIONS: JobOptions = {
   quality: 'high',
   fps: null,
+};
+const DEFAULT_BATCH_SETTINGS: BatchSettings = {
+  outputDir: null,
+  format: 'mp4',
+  outputNameTemplate: '{name}',
+  defaultQuality: 'high',
+  defaultFps: null,
+  staticDuration: 1,
 };
 const QUALITY_OPTIONS: { value: QualityPreset; label: string }[] = [
   { value: 'high', label: 'High' },
@@ -52,14 +68,18 @@ const FPS_OPTIONS: { value: number | null; label: string }[] = [
   { value: 30, label: '30' },
   { value: 60, label: '60' },
 ];
+const FORMAT_OPTIONS: { value: OutputFormat; label: string }[] = [
+  { value: 'mp4', label: 'MP4 (H.264)' },
+  { value: 'mov', label: 'MOV (H.264)' },
+];
 
 export function VideoConverter() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [batchSettings, setBatchSettings] = useState<BatchSettings>({
-    outputDir: null,
-  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [batchSettings, setBatchSettings] = useState<BatchSettings>(DEFAULT_BATCH_SETTINGS);
+  const nextSequence = useRef(1);
 
   // Set up Tauri file drop listener
   useEffect(() => {
@@ -131,16 +151,22 @@ export function VideoConverter() {
   const addFiles = (files: string[]) => {
     setJobs(prev => {
       const existing = new Set(prev.map(job => job.path));
+      let sequence = nextSequence.current;
       const additions = files
         .filter(path => !existing.has(path))
         .map(path => ({
           id: crypto.randomUUID(),
           path,
           name: path.split('/').pop() || path,
+          sequence: sequence++,
           status: 'idle' as JobStatus,
           progress: 0,
-          options: { ...DEFAULT_OPTIONS },
+          options: {
+            quality: batchSettings.defaultQuality ?? DEFAULT_OPTIONS.quality,
+            fps: batchSettings.defaultFps ?? DEFAULT_OPTIONS.fps,
+          },
         }));
+      nextSequence.current = sequence;
       return [...prev, ...additions];
     });
   };
@@ -156,6 +182,19 @@ export function VideoConverter() {
       prev.map(job =>
         job.id === id ? { ...job, options: { ...job.options, ...patch } } : job
       )
+    );
+  };
+
+  const applyDefaultsToAll = () => {
+    setJobs(prev =>
+      prev.map(job => ({
+        ...job,
+        options: {
+          ...job.options,
+          quality: batchSettings.defaultQuality,
+          fps: batchSettings.defaultFps,
+        },
+      }))
     );
   };
 
@@ -177,6 +216,10 @@ export function VideoConverter() {
           outputDir: batchSettings.outputDir,
           quality: job.options.quality,
           fps: job.options.fps,
+          format: batchSettings.format,
+          outputNameTemplate: batchSettings.outputNameTemplate,
+          sequence: job.sequence,
+          staticDuration: batchSettings.staticDuration,
         },
         (prog) => {
           updateJob(job.id, { progress: prog });
@@ -329,10 +372,11 @@ export function VideoConverter() {
             }}
             disabled={row.original.status === 'converting'}
           >
-            <option value="auto">Original</option>
-            <option value="24">24 fps</option>
-            <option value="30">30 fps</option>
-            <option value="60">60 fps</option>
+            {FPS_OPTIONS.map(option => (
+              <option key={option.label} value={option.value ?? 'auto'}>
+                {option.label === 'Original' ? 'Original' : `${option.label} fps`}
+              </option>
+            ))}
           </select>
           <span className="pointer-events-none absolute right-2 text-[10px] text-gray-500 dark:text-neutral-400">
             ▾
@@ -435,6 +479,13 @@ export function VideoConverter() {
               </Button>
               <Button
                 variant="ghost"
+                className="h-8 rounded-full px-3 text-xs text-gray-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                onClick={() => setShowSettings(prev => !prev)}
+              >
+                {showSettings ? 'Hide Settings' : 'Batch Settings'}
+              </Button>
+              <Button
+                variant="ghost"
                 className="h-8 rounded-full px-3 text-xs text-gray-500 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
                 onClick={handleClearCompleted}
                 disabled={jobs.length === 0}
@@ -444,6 +495,146 @@ export function VideoConverter() {
             </div>
           </div>
         </header>
+        {showSettings && (
+          <div className="px-4 pt-3">
+            <div className="rounded-2xl border border-black/5 bg-white/80 p-4 text-[12px] text-gray-700 shadow-sm dark:border-white/10 dark:bg-neutral-900/70 dark:text-neutral-200">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Output folder</p>
+                  <div className="flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 dark:border-white/10 dark:bg-neutral-900">
+                    <Folder className="h-3.5 w-3.5 text-gray-500 dark:text-neutral-400" />
+                    <span className="flex-1 truncate text-[12px] text-gray-700 dark:text-neutral-200">
+                      {batchSettings.outputDir ? batchSettings.outputDir : 'Same folder as source'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-full px-2 text-[11px] text-gray-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+                      onClick={handleSelectOutputDir}
+                    >
+                      Choose…
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Output format</p>
+                  <div className="relative">
+                    <select
+                      className="h-8 w-full appearance-none rounded-lg border border-black/10 bg-white px-3 pr-7 text-[12px] font-medium text-gray-800 shadow-sm outline-none transition hover:bg-gray-50 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800 dark:focus:ring-white/10"
+                      value={batchSettings.format}
+                      onChange={(event) =>
+                        setBatchSettings(prev => ({ ...prev, format: event.target.value as OutputFormat }))
+                      }
+                    >
+                      {FORMAT_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 dark:text-neutral-400">
+                      ▾
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Output name</p>
+                  <input
+                    className="h-8 w-full rounded-lg border border-black/10 bg-white px-3 text-[12px] text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:placeholder:text-neutral-500 dark:focus:ring-white/10"
+                    value={batchSettings.outputNameTemplate}
+                    onChange={(event) =>
+                      setBatchSettings(prev => ({ ...prev, outputNameTemplate: event.target.value }))
+                    }
+                    placeholder="{name}_converted_{counter}"
+                  />
+                  <p className="text-[11px] text-gray-500 dark:text-neutral-400">
+                    Tokens: {`{name}`} {`{counter}`} {`{date}`} {`{time}`} {`{ext}`}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Default quality</p>
+                  <div className="relative">
+                    <select
+                      className="h-8 w-full appearance-none rounded-lg border border-black/10 bg-white px-3 pr-7 text-[12px] font-medium text-gray-800 shadow-sm outline-none transition hover:bg-gray-50 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800 dark:focus:ring-white/10"
+                      value={batchSettings.defaultQuality}
+                      onChange={(event) =>
+                        setBatchSettings(prev => ({
+                          ...prev,
+                          defaultQuality: event.target.value as QualityPreset,
+                        }))
+                      }
+                    >
+                      {QUALITY_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 dark:text-neutral-400">
+                      ▾
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Default FPS</p>
+                  <div className="relative">
+                    <select
+                      className="h-8 w-full appearance-none rounded-lg border border-black/10 bg-white px-3 pr-7 text-[12px] font-medium text-gray-800 shadow-sm outline-none transition hover:bg-gray-50 focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800 dark:focus:ring-white/10"
+                      value={batchSettings.defaultFps ?? 'auto'}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setBatchSettings(prev => ({
+                          ...prev,
+                          defaultFps: value === 'auto' ? null : Number(value),
+                        }));
+                      }}
+                    >
+                      {FPS_OPTIONS.map(option => (
+                        <option key={option.label} value={option.value ?? 'auto'}>
+                          {option.label === 'Original' ? 'Original' : `${option.label} fps`}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 dark:text-neutral-400">
+                      ▾
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Static duration</p>
+                  <input
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    className="h-8 w-full rounded-lg border border-black/10 bg-white px-3 text-[12px] text-gray-800 shadow-sm outline-none transition focus:ring-2 focus:ring-black/10 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:focus:ring-white/10"
+                    value={batchSettings.staticDuration}
+                    onChange={(event) =>
+                      setBatchSettings(prev => ({
+                        ...prev,
+                        staticDuration: Math.max(0.5, Number(event.target.value || 1)),
+                      }))
+                    }
+                  />
+                  <p className="text-[11px] text-gray-500 dark:text-neutral-400">Seconds for non-animated WebP.</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-gray-500 dark:text-neutral-400">
+                  Defaults apply to new files you add to the queue.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-full border-black/10 bg-white px-3 text-[11px] text-gray-700 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-neutral-800"
+                  onClick={applyDefaultsToAll}
+                  disabled={jobs.length === 0}
+                >
+                  Apply defaults to all
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <section className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
           {jobs.length === 0 ? (
             <div className="flex min-h-[60vh] items-center justify-center">

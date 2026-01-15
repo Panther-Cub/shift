@@ -9,6 +9,10 @@ export async function convertWebPToMp4(
     quality?: 'high' | 'balanced' | 'small';
     fps?: number | null;
     background?: string | null;
+    format?: 'mp4' | 'mov';
+    outputNameTemplate?: string | null;
+    sequence?: number | null;
+    staticDuration?: number | null;
   },
   onProgress?: (progress: number) => void
 ): Promise<string> {
@@ -31,6 +35,10 @@ export async function convertWebPToMp4(
         quality: options.quality ?? 'high',
         fps: options.fps ?? null,
         background: options.background ?? null,
+        outputFormat: options.format ?? 'mp4',
+        outputNameTemplate: options.outputNameTemplate ?? null,
+        sequence: options.sequence ?? null,
+        staticDuration: options.staticDuration ?? null,
       },
     });
 

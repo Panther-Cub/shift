@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use serde::Deserialize;
 use tauri::{Emitter, Listener, Manager};
 use image::{imageops, Rgba, RgbaImage};
+use time::{format_description, OffsetDateTime};
 
 #[tauri::command]
 async fn convert_webp_to_mp4(
@@ -40,21 +41,35 @@ fn convert_webp_to_mp4_sync(
 
     let settings = ConversionSettings::from_options(&options)?;
 
-    // Create output path (same directory or target directory, same name, .mp4 extension)
+    // Create output path (same directory or target directory, template-driven name)
+    let input_stem = input
+        .file_stem()
+        .ok_or_else(|| "Invalid input file name".to_string())?
+        .to_string_lossy()
+        .to_string();
+    let output_ext = settings.output_format.as_str();
+    let output_stem = render_output_name(
+        &settings.output_name_template,
+        &input_stem,
+        settings.sequence,
+        output_ext,
+    );
     let output = match &settings.output_dir {
         Some(dir) => {
             let mut out_dir = PathBuf::from(dir);
             fs::create_dir_all(&out_dir)
                 .map_err(|e| format!("Failed to create output directory: {}", e))?;
-            let file_stem = input
-                .file_stem()
-                .ok_or_else(|| "Invalid input file name".to_string())?;
-            out_dir.push(file_stem);
-            out_dir.set_extension("mp4");
+            out_dir.push(&output_stem);
+            out_dir.set_extension(output_ext);
             out_dir
         }
-        None => input.with_extension("mp4"),
+        None => {
+            let mut out = input.with_file_name(&output_stem);
+            out.set_extension(output_ext);
+            out
+        }
     };
+    let output = ensure_unique_path(output);
     let output_str = output.to_string_lossy().to_string();
 
     // Get the bundled FFmpeg path
@@ -124,10 +139,16 @@ fn run_ffmpeg_conversion(
 
     if !is_animated {
         // Static WebP -> short video clip.
-        cmd.args(["-loop", "1", "-t", "1", "-r", "30"]);
-    }
-
-    if let Some(fps) = settings.fps {
+        let fps = settings.fps.unwrap_or(30);
+        cmd.args([
+            "-loop",
+            "1",
+            "-t",
+            &settings.static_duration.to_string(),
+            "-r",
+            &fps.to_string(),
+        ]);
+    } else if let Some(fps) = settings.fps {
         cmd.args(["-r", &fps.to_string()]);
     }
 
@@ -297,7 +318,12 @@ fn fallback_convert_with_webpmux(
         canvas
             .save(&composed_png)
             .map_err(|e| format!("Failed to write composed frame {}: {}", frame_index, e))?;
-        frame_paths.push((composed_png, frame.duration_ms));
+        let duration_ms = if frames.len() == 1 {
+            (settings.static_duration * 1000.0) as u64
+        } else {
+            frame.duration_ms
+        };
+        frame_paths.push((composed_png, duration_ms));
 
         if frame.dispose_background {
             clear_rect(
@@ -835,6 +861,10 @@ struct ConvertOptions {
     quality: Option<String>,
     fps: Option<u32>,
     background: Option<String>,
+    output_format: Option<String>,
+    output_name_template: Option<String>,
+    sequence: Option<u32>,
+    static_duration: Option<f64>,
 }
 
 struct ConversionSettings {
@@ -843,6 +873,10 @@ struct ConversionSettings {
     preset: String,
     fps: Option<u32>,
     background: Option<String>,
+    output_format: String,
+    output_name_template: String,
+    sequence: u32,
+    static_duration: f64,
 }
 
 impl ConversionSettings {
@@ -868,12 +902,41 @@ impl ConversionSettings {
             "small" => (24, "fast"),
             _ => (12, "slow"),
         };
+        let output_format = options
+            .output_format
+            .as_deref()
+            .unwrap_or("mp4")
+            .to_lowercase();
+        let output_format = match output_format.as_str() {
+            "mov" => "mov",
+            _ => "mp4",
+        }
+        .to_string();
+        let output_name_template = options
+            .output_name_template
+            .as_deref()
+            .unwrap_or("{name}")
+            .trim()
+            .to_string();
+        let sequence = options.sequence.unwrap_or(1);
+        let static_duration = options.static_duration.unwrap_or(1.0);
+        let static_duration = if static_duration.is_finite() {
+            static_duration
+        } else {
+            1.0
+        }
+        .max(0.1)
+        .min(60.0);
         Ok(Self {
             output_dir,
             crf,
             preset: preset.to_string(),
             fps: options.fps,
             background: options.background.clone(),
+            output_format,
+            output_name_template,
+            sequence,
+            static_duration,
         })
     }
 
@@ -919,6 +982,82 @@ fn build_ffmpeg_filter(settings: &ConversionSettings) -> String {
         }
     }
     base.to_string()
+}
+
+fn render_output_name(template: &str, input_stem: &str, sequence: u32, ext: &str) -> String {
+    let (date, time) = format_date_time();
+    let counter = sequence.to_string();
+    let mut name = template.to_string();
+    name = replace_token(&name, "name", input_stem);
+    name = replace_token(&name, "counter", &counter);
+    name = replace_token(&name, "date", &date);
+    name = replace_token(&name, "time", &time);
+    name = replace_token(&name, "ext", ext);
+    name = sanitize_filename(name.trim());
+    if name.is_empty() {
+        sanitize_filename(input_stem)
+    } else {
+        name
+    }
+}
+
+fn sanitize_filename(value: &str) -> String {
+    let mut sanitized = String::new();
+    for ch in value.chars() {
+        match ch {
+            '/' | '\\' | ':' => sanitized.push('-'),
+            _ => sanitized.push(ch),
+        }
+    }
+    sanitized.trim().to_string()
+}
+
+fn replace_token(source: &str, token: &str, value: &str) -> String {
+    let brace = format!("{{{}}}", token);
+    let bracket = format!("[{}]", token);
+    source.replace(&brace, value).replace(&bracket, value)
+}
+
+fn format_date_time() -> (String, String) {
+    let now = OffsetDateTime::now_utc();
+    let date_format = format_description::parse("[year][month][day]").unwrap();
+    let time_format = format_description::parse("[hour][minute][second]").unwrap();
+    let date = now
+        .format(&date_format)
+        .unwrap_or_else(|_| "00000000".to_string());
+    let time = now
+        .format(&time_format)
+        .unwrap_or_else(|_| "000000".to_string());
+    (date, time)
+}
+
+fn ensure_unique_path(mut path: PathBuf) -> PathBuf {
+    if !path.exists() {
+        return path;
+    }
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_string();
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("output")
+        .to_string();
+    let parent = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let mut index = 1;
+    loop {
+        let candidate_name = format!("{}-{}", stem, index);
+        let mut candidate = parent.join(&candidate_name);
+        if !ext.is_empty() {
+            candidate.set_extension(&ext);
+        }
+        if !candidate.exists() {
+            return candidate;
+        }
+        index += 1;
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
